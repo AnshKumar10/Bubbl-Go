@@ -2,8 +2,10 @@ export type MessageEventCallback = (msg: Message) => void;
 
 export type Message = {
   id: number;
-  from: "user" | "bot";
-  body: string;
+  body: {
+    message: string;
+    username: string;
+  };
 };
 
 const socket = new WebSocket("ws://localhost:8080/ws");
@@ -29,7 +31,13 @@ export const connect = (cb: MessageEventCallback) => {
   };
 };
 
-export const sendMessage = (message: string) => {
+export const sendMessage = (message: string, username: string) => {
   console.log("Sending Message...", message);
-  socket.send(message);
+
+  socket.send(
+    JSON.stringify({
+      message,
+      username,
+    })
+  );
 };
