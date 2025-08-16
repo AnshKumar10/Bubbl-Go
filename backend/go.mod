@@ -1,3 +1,5 @@
-module github.com/AnshKumar10/Bubbl-go
+module github.com/AnshKumar10/Bubbl-Go
 
 go 1.24.6
+
+require github.com/gorilla/websocket v1.5.3 // indirect
