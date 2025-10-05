@@ -1,116 +1,125 @@
-import "./App.css";
-import { useState, useRef, useEffect } from "react";
-import { connect, sendMessage, type Message as Msg } from "./socket";
+import { useState, useRef, useEffect, useCallback } from "react";
+import {
+  connect,
+  emitStopTypingEvent,
+  emitTypingEvent,
+  sendMessage,
+} from "./socket";
+import { UsernameInput } from "./components/UsernameInput";
+import { Message } from "./components/Message";
+import { type Message as MessageType } from "./types/chat";
+import { TypingIndicator } from "./components/TypingIndicator";
+import { MessageInput } from "./components/MessageInput";
 
-export default function App() {
-  const [messages, setMessages] = useState<Msg[]>([]);
+function App() {
+  const [messages, setMessages] = useState<MessageType[]>([]);
   const [input, setInput] = useState("");
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [username, setUsername] = useState("");
-  const endRef = useRef<HTMLDivElement | null>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   useEffect(() => {
-    connect((msg: Msg) => {
-      setMessages((prev) => [...prev, msg]);
-    });
+    const handleIncomingMessage = (message: MessageType) => {
+      const { event, body } = message;
+
+      switch (event) {
+        case "message":
+          setMessages((prev) => [...prev, message]);
+          break;
+
+        case "typing":
+          setTypingUsers((prev) =>
+            !prev.includes(body.username) && body.username !== username
+              ? [...prev, body.username]
+              : prev
+          );
+          break;
+
+        case "stop_typing":
+          setTypingUsers((prev) =>
+            prev.filter((user) => user !== body.username)
+          );
+          break;
+
+        default:
+          break;
+      }
+    };
+
+    connect(handleIncomingMessage);
+
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
   }, []);
-
-  console.log(messages);
-
-  // Function to get user initials for avatars
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((word) => word[0])
-      .join("")
-      .toUpperCase()
-      .substring(0, 2);
-  };
-
-  // Function to get avatar CSS class based on username
-  const getAvatarClass = (username: string) => {
-    const name = username.toLowerCase();
-    if (name.includes("david")) return "avatar avatar-david";
-    if (name.includes("charlie")) return "avatar avatar-charlie";
-    if (name.includes("bob")) return "avatar avatar-bob";
-    return "avatar avatar-default";
-  };
-
-  // Function to get current time
-  const getCurrentTime = () => {
-    const now = new Date();
-    return now.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  };
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || !username.trim()) {
-      alert("Enter username first and then message");
+      alert("Please enter a username and a message");
       return;
     }
+
+    emitStopTypingEvent(username);
     sendMessage(input, username);
     setInput("");
+    setIsTyping(false);
   };
 
+  const handleInputChange = (value: string) => {
+    setInput(value);
+  };
+
+  const handleTyping = useCallback(() => {
+    if (!isTyping) {
+      emitTypingEvent(username);
+      setIsTyping(true);
+    }
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      emitStopTypingEvent(username);
+      setIsTyping(false);
+    }, 3000);
+  }, [isTyping, username]);
+
   return (
-    <section className="chat-container">
-      {/* Header with Username Input */}
-      <div className="chat-header">
-        <input
-          type="text"
-          placeholder="Enter username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          className="username-input"
-        />
+    <div className="flex flex-col h-screen bg-gray-100">
+      <UsernameInput
+        username={username}
+        onUsernameChange={(e) => setUsername(e.target.value)}
+      />
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+        {messages.map((message, index) => (
+          <Message
+            key={`${message.body.username}-${index}`}
+            message={message}
+          />
+        ))}
+        <TypingIndicator typingUsers={typingUsers} />
+        <div ref={endRef} />
       </div>
 
-      <div className="messages">
-        {messages.map((msg, index) =>
-          msg.body.username === "System" ? (
-            <div key={index} className="system-message">
-              {msg.body.message}
-            </div>
-          ) : (
-            <article key={index} className="message fade-in">
-              {/* User Avatar */}
-              <div className={getAvatarClass(msg.body.username)}>
-                {getInitials(msg.body.username)}
-              </div>
-
-              {/* Message Content */}
-              <div className="message-content">
-                {/* Message Header */}
-                <div className="message-header">
-                  <span className="username">{msg.body.username}</span>
-                  <span className="timestamp">Today, {getCurrentTime()}</span>
-                </div>
-
-                {/* Message Bubble */}
-                <div className="message-bubble">{msg.body.message}</div>
-              </div>
-            </article>
-          )
-        )}
-        <div ref={endRef}></div>
-      </div>
-
-      <form className="chat-input" onSubmit={handleSendMessage}>
-        <input
-          type="text"
-          placeholder="Type a message..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-        />
-        <button type="submit">➤</button>
-      </form>
-    </section>
+      <MessageInput
+        input={input}
+        onInputChange={handleInputChange}
+        onSendMessage={handleSendMessage}
+        onTyping={handleTyping}
+      />
+    </div>
   );
 }
+
+export default App;
