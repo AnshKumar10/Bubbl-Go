@@ -1,8 +1,5 @@
 # BubblGo
 
-A real-time distributed chat application built with Go (Golang) backend using WebSockets and React + TypeScript frontend.
-
-## Overview
 
 BubblGo is a lightweight, real-time chat application that enables multiple users to communicate instantly through WebSocket connections. The backend is built with Go for high performance and concurrency, while the frontend uses React with TypeScript for a modern, type-safe user experience.
 
